@@ -138,41 +138,72 @@ export default function StaffDashboard({ socket, onBack }: Props) {
 
   const handleSaveInstruction = async (e: React.FormEvent<HTMLFormElement>, instructionId?: string, scenarioId?: string) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
     
-    if (instructionId) {
-      await fetch(`/api/instructions/${instructionId}`, {
-        method: 'PUT',
-        body: formData
-      });
-    } else if (scenarioId) {
-      const instructions = instructionsByScenario[scenarioId] || [];
-      const newId = crypto.randomUUID();
-      
-      await fetch(`/api/scenarios/${scenarioId}/instructions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: newId,
-          name: formData.get('name'),
-          order_index: instructions.length
-        })
-      });
+    if (submitBtn) {
+      submitBtn.textContent = '...';
+      submitBtn.disabled = true;
+    }
 
-      const file = formData.get('media') as File;
-      if (file && file.size > 0) {
-        const updateData = new FormData();
-        updateData.append('name', formData.get('name') as string);
-        updateData.append('media', file);
-        await fetch(`/api/instructions/${newId}`, {
+    try {
+      if (instructionId) {
+        const res = await fetch(`/api/instructions/${instructionId}`, {
           method: 'PUT',
-          body: updateData
+          body: formData
         });
+        if (!res.ok) throw new Error("Server error");
+      } else if (scenarioId) {
+        const instructions = instructionsByScenario[scenarioId] || [];
+        const newId = crypto.randomUUID();
+        
+        await fetch(`/api/scenarios/${scenarioId}/instructions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: newId,
+            name: formData.get('name'),
+            order_index: instructions.length
+          })
+        });
+
+        const file = formData.get('media') as File;
+        if (file && file.size > 0) {
+          const updateData = new FormData();
+          updateData.append('name', formData.get('name') as string);
+          updateData.append('media', file);
+          await fetch(`/api/instructions/${newId}`, {
+            method: 'PUT',
+            body: updateData
+          });
+        }
+      }
+      
+      await fetchScenarios();
+      
+      // Clear file inputs instead of resetting the whole form (which overrides text)
+      const fileInput = form.querySelector('input[type="file"]') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+      const checkbox = form.querySelector('input[name="remove_media"]') as HTMLInputElement;
+      if (checkbox) checkbox.checked = false;
+
+      if (submitBtn) {
+        submitBtn.textContent = 'Sauvé !';
+        setTimeout(() => {
+          if (submitBtn) {
+            submitBtn.textContent = 'Sauver';
+            submitBtn.disabled = false;
+          }
+        }, 1500);
+      }
+    } catch (err) {
+      console.error(err);
+      if (submitBtn) {
+        submitBtn.textContent = 'Erreur';
+        submitBtn.disabled = false;
       }
     }
-    
-    fetchScenarios();
-    (e.target as HTMLFormElement).reset();
   };
 
   const handleDeleteInstruction = (id: string) => {
